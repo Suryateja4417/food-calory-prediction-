@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4CAF50">
+    <title>Food Calorie Predictor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Green header banner -->
+    <div class="header-banner">
+        <div class="header-content">
+            <button class="ai-badge">
+                <i class="fas fa-camera"></i> AI-Powered Image Recognition
+            </button>
+            <h1>Food Calorie Predictor</h1>
+            <p>Upload a food image and instantly discover its nutritional content with AI</p>
+        </div>
+    </div>
+
+    <!-- Main content area -->
+    <div class="main-wrapper">
+        <!-- Left Panel - Upload -->
+        <div class="left-panel">
+            <div class="upload-card">
+                <div class="card-header">
+                    <i class="fas fa-upload"></i>
+                    <h2>Upload Food Image</h2>
+                </div>
+                
+                <div class="image-display" id="imageDisplay">
+                    <div class="upload-placeholder" id="uploadPlaceholder">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Upload Food Image</p>
+                        <span>Drag & drop or click to select</span>
+                        <small>Supports: JPG, PNG, WEBP (max 10MB)</small>
+                    </div>
+                    <img id="previewImage" style="display: none;" alt="Uploaded food">
+                </div>
+                
+                <button class="analyze-btn" id="analyzeBtn" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-camera"></i> Analyze Food Image
+                </button>
+                
+                <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                
+                <div class="how-it-works">
+                    <i class="fas fa-star"></i>
+                    <h3>How it works</h3>
+                    <ol>
+                        <li>Upload a clear photo of your food</li>
+                        <li>AI identifies food items and analyzes nutrients</li>
+                        <li>View detailed breakdown with interactive 3D charts</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Results -->
+        <div class="right-panel">
+            <div class="results-placeholder" id="resultsPlaceholder">
+                <i class="fas fa-camera"></i>
+                <h2>Ready to analyze</h2>
+                <p>Upload a food image to get instant nutritional analysis</p>
+            </div>
+            
+            <div class="results-container" id="resultsContainer" style="display: none;">
+                <!-- Total Calories Summary -->
+                <div class="calories-summary">
+                    <div class="calories-box">
+                        <div class="calories-left">
+                            <i class="fas fa-fire"></i>
+                            <div>
+                                <span class="calories-number" id="totalCalories">0</span>
+                                <span class="calories-label">Total Calories</span>
+                            </div>
+                        </div>
+                        <div class="calories-right">
+                            <i class="fas fa-chart-line"></i>
+                            <span id="itemCount">0 items</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Food Items List -->
+                <div class="food-items" id="foodItems"></div>
+                
+                <!-- Nutritional Breakdown -->
+                <div class="nutrition-breakdown" id="nutritionBreakdown"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const previewImage = document.getElementById('previewImage');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const resultsPlaceholder = document.getElementById('resultsPlaceholder');
+        const resultsContainer = document.getElementById('resultsContainer');
+
+        // Drag and drop
+        const imageDisplay = document.getElementById('imageDisplay');
+        
+        imageDisplay.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            imageDisplay.classList.add('drag-over');
+        });
+
+        imageDisplay.addEventListener('dragleave', () => {
+            imageDisplay.classList.remove('drag-over');
+        });
+
+        imageDisplay.addEventListener('drop', (e) => {
+            e.preventDefault();
+            imageDisplay.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+
+        // Click to upload
+        imageDisplay.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Please select a valid image file.');
+                return;
+            }
+
+            // Show image
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                previewImage.style.display = 'block';
+                uploadPlaceholder.style.display = 'none';
+                
+                // Process image
+                uploadImage(file);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function uploadImage(file) {
+            resultsPlaceholder.style.display = 'none';
+            resultsContainer.style.display = 'block';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayResults(data);
+                }
+            })
+            .catch(err => console.error('Error:', err));
+        }
+
+        function displayResults(data) {
+            // Update calories
+            const calories = data.nutrition?.calories !== 'N/A' ? data.nutrition.calories : 0;
+            document.getElementById('totalCalories').textContent = Math.round(calories);
+            
+            // Update item count
+            document.getElementById('itemCount').textContent = '1 item';
+            
+            // Display food item
+            const foodItems = document.getElementById('foodItems');
+            const foodName = data.nutrition?.name || data.label || 'Unknown Food';
+            const carbs = data.nutrition?.carbohydrates !== 'N/A' ? data.nutrition.carbohydrates : 0;
+            const protein = data.nutrition?.protein !== 'N/A' ? data.nutrition.protein : 0;
+            const fat = data.nutrition?.fat !== 'N/A' ? data.nutrition.fat : 0;
+            
+            foodItems.innerHTML = `
+                <div class="food-item">
+                    <strong>${foodName}</strong>
+                    <div class="food-macros">
+                        C: ${carbs}g • P: ${protein}g • F: ${fat}g
+                    </div>
+                    <div class="food-calories">${Math.round(calories)} <small>kcal</small></div>
+                </div>
+            `;
+            
+            // Display nutrition breakdown
+            displayNutritionBreakdown(carbs, protein, fat);
+            
+            // Display additional nutritional factors
+            displayAdditionalNutrition(data.nutrition);
+        }
+        
+        function displayAdditionalNutrition(nutrition) {
+            if (!nutrition) return;
+            
+            const sodium = nutrition.sodium !== 'N/A' ? nutrition.sodium : 0;
+            const potassium = nutrition.potassium !== 'N/A' ? nutrition.potassium : 0;
+            const cholesterol = nutrition.cholesterol !== 'N/A' ? nutrition.cholesterol : 0;
+            const fiber = nutrition.fiber !== 'N/A' ? nutrition.fiber : 0;
+            const saturatedFat = nutrition.saturated_fat !== 'N/A' ? nutrition.saturated_fat : 0;
+            const sugar = nutrition.sugar !== 'N/A' ? nutrition.sugar : 0;
+            
+            const nutritionBreakdown = document.getElementById('nutritionBreakdown');
+            const existingHtml = nutritionBreakdown.innerHTML;
+            
+            nutritionBreakdown.innerHTML = existingHtml + `
+                <div class="additional-nutrition">
+                    <h4>Additional Nutrients (per 100g)</h4>
+                    <div class="nutrient-grid">
+                        <div class="nutrient-item">
+                            <i class="fas fa-flask" style="color: #FF5722;"></i>
+                            <div>
+                                <span class="nutrient-value">${sodium}mg</span>
+                                <span class="nutrient-label">Sodium</span>
+                            </div>
+                        </div>
+                        <div class="nutrient-item">
+                            <i class="fas fa-leaf" style="color: #4CAF50;"></i>
+                            <div>
+                                <span class="nutrient-value">${potassium}mg</span>
+                                <span class="nutrient-label">Potassium</span>
+                            </div>
+                        </div>
+                        <div class="nutrient-item">
+                            <i class="fas fa-heart" style="color: #F44336;"></i>
+                            <div>
+                                <span class="nutrient-value">${cholesterol}mg</span>
+                                <span class="nutrient-label">Cholesterol</span>
+                            </div>
+                        </div>
+                        <div class="nutrient-item">
+                            <i class="fas fa-wheat" style="color: #8BC34A;"></i>
+                            <div>
+                                <span class="nutrient-value">${fiber}g</span>
+                                <span class="nutrient-label">Fiber</span>
+                            </div>
+                        </div>
+                        <div class="nutrient-item">
+                            <i class="fas fa-tint" style="color: #FF9800;"></i>
+                            <div>
+                                <span class="nutrient-value">${saturatedFat}g</span>
+                                <span class="nutrient-label">Saturated Fat</span>
+                            </div>
+                        </div>
+                        <div class="nutrient-item">
+                            <i class="fas fa-cube" style="color: #E91E63;"></i>
+                            <div>
+                                <span class="nutrient-value">${sugar}g</span>
+                                <span class="nutrient-label">Sugar</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayNutritionBreakdown(carbs, protein, fat) {
+            const total = carbs + protein + fat;
+            const carbsPercent = (carbs / total) * 100;
+            const proteinPercent = (protein / total) * 100;
+            const fatPercent = (fat / total) * 100;
+            
+            document.getElementById('nutritionBreakdown').innerHTML = `
+                <h3>Nutritional Breakdown</h3>
+                <div class="chart-container">
+                    <div class="pie-chart">
+                        <svg viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#4CAF50" stroke-width="8" stroke-dasharray="${carbsPercent * 2.827} ${283}" transform="rotate(-90 50 50)"/>
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#FF9800" stroke-width="8" stroke-dasharray="${proteinPercent * 2.827} ${283}" stroke-dashoffset="${-carbsPercent * 2.827}" transform="rotate(-90 50 50)"/>
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#9C27B0" stroke-width="8" stroke-dasharray="${fatPercent * 2.827} ${283}" stroke-dashoffset="${-(carbsPercent + proteinPercent) * 2.827}" transform="rotate(-90 50 50)"/>
+                        </svg>
+                        <div class="chart-legend">
+                            <div><span class="legend-dot" style="background: #4CAF50;"></span> Carbs</div>
+                            <div><span class="legend-dot" style="background: #FF9800;"></span> Protein</div>
+                            <div><span class="legend-dot" style="background: #9C27B0;"></span> Fat</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="macro-cards">
+                    <div class="macro-card carbs">
+                        <span class="macro-value">${carbs}g</span>
+                        <span class="macro-label">Carbs</span>
+                    </div>
+                    <div class="macro-card protein">
+                        <span class="macro-value">${protein}g</span>
+                        <span class="macro-label">Protein</span>
+                    </div>
+                    <div class="macro-card fat">
+                        <span class="macro-value">${fat}g</span>
+                        <span class="macro-label">Fat</span>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
